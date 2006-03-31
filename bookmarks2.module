@@ -73,9 +73,6 @@ function bookmarks2_menu($may_cache) {
     'type' => MENU_LOCAL_TASK);
   $items[] = array('path' => "bookmarks2/$user->uid/deletefolder", 'title' => t('delete folder'),
     'callback' => 'bookmarks2_folder_delete', 'access' => $access, 'type' => MENU_CALLBACK);
-  $items[] = array('path' => "bookmarks2/$user->uid/config", 'title' => t('bookmark preferences'),
-    'callback' => 'bookmarks2_page', 'access' => $access, 'weight' => 25,
-    'type' => MENU_LOCAL_TASK);
   $items[] = array('path' => "bookmarks2/$user->uid/rss.xml", 'title' => t('feed'),
     'callback' => 'bookmarks2_feed', 'access' => $access,
     'type' => MENU_CALLBACK);
@@ -87,6 +84,71 @@ function bookmarks2_menu($may_cache) {
  */
 function bookmarks2_perm() {
   return array('access bookmarks2');
+}
+
+/**
+ * Accepts username, and diary entry numbers to the import queue
+ */
+function bookmarks2_user() {
+  global $user;
+
+  if ($account = user_load(array('uid' => arg(1), 'status' => 1))) {
+    $edit = $_POST['edit'];
+
+    if ($edit) {
+      if (!$edit['username']) {
+        form_set_error('username', t('You must enter a username.'));
+      }
+      if (!isset($edit['endentry']) || !is_numeric($edit['endentry'])) {
+        form_set_error('endentry', t('You must enter an ending entry.'));
+      }
+
+      if (!form_get_errors()) {
+        if(variable_get('bookmarks2_login_reminder_enabled', 0)) {
+          $hash = _bookmarks2_hash_key($edit['bookmarks2_login_reminder_key']);
+          if (db_result(db_query('SELECT COUNT(uid) FROM {bookmarks2_prefs} WHERE uid = %d', $user->uid))) {
+            db_query("UPDATE {bookmarks2_prefs} SET pword_hash = '%s' WHERE uid = %d)", $hash, $account->uid);
+            db_query("UPDATE {bookmarks2} SET pword = NULL WHERE uid = %d)", $account->uid);
+            drupal_set_message(t('All stored password reminders deleted.'));
+          } else {
+            db_query("INSERT INTO {bookmarks2_prefs} (uid, pword_hash) VALUES (%d, '%s')", $account->uid, $hash);
+          }
+          drupal_set_message(t('Your password reminder key has been encrypted and stored.'));
+        }
+
+        drupal_goto("user/$account->uid");
+      }
+    }
+
+    if(variable_get('bookmarks2_login_reminder_enabled', 0)) {
+      $form['bookmarks2_login_reminder_key'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Login reminder key'),
+        '#default_value' => isset($edit['username']) ? $edit['username'] : '',
+        '#description' => t("This key will be used to encrypt your login reminder passwords. You will need to enter it each time you save or view a login reminder's password. <strong>NOTE! Submitting a value here will erase all stored passwords!</strong>"),
+        '#size' => 20,
+        '#maxlength' => 50,
+        '#required' => false
+      );
+    }
+    $form['bookmarks2_link_display'] = array(
+      '#type' => 'radios',
+      '#title' => t('Link display'),
+      '#default_value' => _bookmarks2_user_pref('bookmarks2_link_display', 0),
+      '#options' => array(t('Title and link separate'), t('Title as link')),
+      '#description' => t('Either show the bookmark name as a link, or the title with the URL as a separate link')
+    );
+    $form['bookmarks2_save_preferences'] = array(
+      '#type' => 'submit',
+      '#value' => t('Save bookmark preferences')
+    );
+
+    print theme('page', drupal_get_form('bookmarks2_user', $form));
+  }
+  else {
+    drupal_not_found();
+  }
+
 }
 
 /********************************************************************
@@ -236,18 +298,13 @@ function bookmarks2_page() {
       $output = ($fid = $_GET['fid']) ? _bookmarks2_folder_form(_bookmarks2_folder_load($fid)) : drupal_set_message(t('Folder cannot be edited, because it is not in your list.'), 'error');
       break;
 
-    case 'config':
-      $title = t('Configure bookmark preferences');
-      $output = _bookmarks2_config();
-      break;
-
     case t('Save folder'):
       $title = t('Folder');
       _bookmarks2_folder_save($edit);
       drupal_goto("bookmarks2/$user->uid/folders");
       break;
 
-    case t('Save preferences'):
+    case t('Save bookmark preferences'):
       $title = t('Boomark preferences');
       _bookmarks2_config_save($edit);
       drupal_goto("bookmarks2/$user->uid");
@@ -282,7 +339,7 @@ function bookmarks2_delete() {
 function bookmarks2_delete_confirm_submit($form_id, $form_values) {
   global $user;
 
-  db_query("DELETE FROM {bookmarks2} WHERE uid = %d AND url = '%s'", $user->uid, urldecode($form_values['url']));
+  db_query("DELETE FROM {bookmarks2} WHERE uid = %d AND url = '%s'", $user->uid, $form_values['url']);
   drupal_set_message(t('Deleted bookmark.'));
 
   return "bookmarks2/{$user->uid}";
@@ -370,7 +427,7 @@ function bookmarks2_form($edit = null) {
     '#default_value' => $edit['url'],
     '#size' => 60,
     '#maxlength' => 128,
-    '#description' => t('Enter the address of the page you want to bookmark. This can be an internal or external reference.'),
+    '#description' => t('Enter the address of the page you want to bookmark. This can be an internal or external reference. For internal bookmarks, use a format similar to "/node/xx". External boomkarks must start with a URL prefix such as "http://".'),
     '#attributes' => null,
     '#required' => true
   );
@@ -433,26 +490,6 @@ function _bookmarks2_folder_form($edit = null) {
   );
 
   return drupal_get_form('bookmarks2_folder_form', $form);
-}
-
-/**
- * lets individuals set preferences for bookmarks
- *
- */
-function _bookmarks2_config() {
-  $form['link_display'] = array(
-    '#type' => 'radios',
-    '#title' => t('Link display'),
-    '#default_value' => _bookmarks2_user_pref('link_display', 0),
-    '#options' => array(t('Title and link separate'), t('Title as link')),
-    '#description' => t('Either show the bookmark name as a link, or the title with the URL as a separate link')
-  );
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => 'Save preferences'
-  );
-
-  return drupal_get_form('_bookmarks2_config', $form);
 }
 
 function _bookmarks2_user_pref($var, $default) {
@@ -708,6 +745,17 @@ function bookmarks2_settings() {
     '#maxlength' => 5,
     '#default_value' => variable_get('bookmarks2_link_crop_size', 50)
   );
+  if(_bookmarks2_mhash_ok() && _bookmarks2_mcrypt_ok()) {
+    $form['bookmarks2_login_reminder_enabled'] = array(
+      '#type' => 'radios',
+      '#title' => t('Enable login reminder support'),
+      '#options' => array(t('No'), t('Yes')),
+      '#default_value' => variable_get('bookmarks2_login_reminder_enabled', '0'),
+      '#description' => t('Gives users the option to store a username and password reminder for each bookmark. The password gets stored with strong encryption when the user correctly enters their password reminder key. Administrators are not able to read or recover the password or encryption key.')
+    );
+  } else {
+    $form['bookmarks2_login_reminder_enabled'] = array('#type' => 'hidden', '#value' => '0');
+  }
   return $form;
 }
 
@@ -754,15 +802,57 @@ function _bookmarks2_get_link($url, $title, $description, $link_display = false)
   } else {
     $title = (strlen($url) > $crop) ? substr($url, 0, $crop - 3). '...' : check_plain($url);
   }
-  return (preg_match("!^[a-zA-Z]+://!", $url)) ? "<a href=\"$url\" title=\"". check_plain($description) ."\">$title</a>" : l($title, $url);
+  return (preg_match("!^[a-zA-Z]+://!", $url)) ? "<a href=\"$url\" title=\"". (empty($description) ? $url : check_plain($description)) ."\">$title</a>" : l($title, $url);
 }
 
+/**
+ * Check if mcrypt extension is installed and supports AES-256
+ *
+ * @return bool
+ */
 function _bookmarks2_mcrypt_ok() {
-  return function_exists('mcrypt_encrypt') && defined(MCRYPT_RIJNDAEL_256);
+  return function_exists('mcrypt_encrypt') && defined('MCRYPT_RIJNDAEL_256');
 }
 
+/**
+ * Check if mhash extension is installed and supports SHA-256
+ *
+ * @return bool
+ */
 function _bookmarks2_mhash_ok() {
-  return function_exists('mhash') && defined(MHASH_SHA256);
+  return function_exists('mhash') && defined('MHASH_SHA256');
+}
+
+/**
+ * encrypt password with AES-256
+ *
+ * @param string $key
+ * @param string $pword
+ * @return string
+ */
+function _bookmarks2_encrypt_pword($key, $pword) {
+  return mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $key, $pword, MCRYPT_MODE_ECB, mcrypt_create_iv(mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB), MCRYPT_RAND));
+}
+
+/**
+ * decrypt password
+ *
+ * @param string $key
+ * @param string $pword
+ * @return string
+ */
+function _bookmarks2_decrypt_pword($key, $encrypted_pword) {
+  return rtrim(mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $key, $encrypted_pword, MCRYPT_MODE_ECB, mcrypt_create_iv(mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB), MCRYPT_RAND)), "\0");
+}
+
+/**
+ * hash key with SHA-256
+ *
+ * @param string $key
+ * @return string
+ */
+function _bookmarks2_hash_key($key) {
+  return mhash(MHASH_SHA256, $key);
 }
 
 ?>
