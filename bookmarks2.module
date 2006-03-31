@@ -1,0 +1,768 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Lets users keep bookmarks
+ *
+ * @todo There's some code/functionality duplication to eliminate
+ *       Callbacks are underutilized
+ */
+
+/********************************************************************
+ * Drupal Hooks
+ ********************************************************************/
+
+/**
+ * Implementation of hook_block().
+ */
+function bookmarks2_block($op = 'list', $delta = 0) {
+  if ($op == 'list') {
+    $blocks[0]['info'] = t('User bookmarks');
+    return $blocks;
+  }
+  elseif ($op == 'view') {
+    switch($delta) {
+      case 0:
+        return theme('bookmarks2_block');
+        break;
+    }
+    return $block;
+  }
+}
+
+/**
+ * Implementation of hook_help().
+ */
+function bookmarks2_help($section) {
+  switch ($section) {
+    case 'admin/modules#description':
+      return t('Enables users to bookmark any page on the site.');
+
+    case 'user/bookmarks2':
+      return t('A bookmark is a link to an address (URL) on the internet.');
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function bookmarks2_menu($may_cache) {
+  global $user;
+  $items = array();
+  $access = user_access('access bookmarks2');
+
+  // Main menu item
+  $items[] = array('path' => "bookmarks2/$user->uid", 'title' => t('my bookmarks'),
+                    'callback' => 'bookmarks2_page', 'access' => $access);
+
+  // Top level tabs
+  $items[] = array('path' => "bookmarks2/$user->uid/overview", 'title' => t('list'),
+    'access' => $access, 'weight' => -10, 'type' => MENU_DEFAULT_LOCAL_TASK);
+  $items[] = array('path' => "bookmarks2/$user->uid/add", 'title' => t('add bookmark'),
+    'callback' => 'bookmarks2_page', 'access' => $access, 'weight' => 10,
+    'type' => MENU_LOCAL_TASK);
+  $items[] = array('path' => "bookmarks2/$user->uid/delete", 'title' => t('delete bookmark'),
+    'callback' => 'bookmarks2_delete', 'access' => $access, 'type' => MENU_CALLBACK);
+  $items[] = array('path' => "bookmarks2/$user->uid/folders", 'title' => t('folders'),
+    'callback' => 'bookmarks2_page', 'access' => $access, 'weight' => 15,
+    'type' => MENU_LOCAL_TASK);
+  $items[] = array('path' => "bookmarks2/$user->uid/addfolder", 'title' => t('add folder'),
+    'callback' => 'bookmarks2_page', 'access' => $access, 'weight' => 20,
+    'type' => MENU_LOCAL_TASK);
+  $items[] = array('path' => "bookmarks2/$user->uid/deletefolder", 'title' => t('delete folder'),
+    'callback' => 'bookmarks2_folder_delete', 'access' => $access, 'type' => MENU_CALLBACK);
+  $items[] = array('path' => "bookmarks2/$user->uid/config", 'title' => t('bookmark preferences'),
+    'callback' => 'bookmarks2_page', 'access' => $access, 'weight' => 25,
+    'type' => MENU_LOCAL_TASK);
+  $items[] = array('path' => "bookmarks2/$user->uid/rss.xml", 'title' => t('feed'),
+    'callback' => 'bookmarks2_feed', 'access' => $access,
+    'type' => MENU_CALLBACK);
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function bookmarks2_perm() {
+  return array('access bookmarks2');
+}
+
+/********************************************************************
+ * Theme Hooks
+ ********************************************************************/
+
+/**
+  @addtogroup themeable
+
+  Bookmarks module specific theme functions.
+  @{
+**/
+
+/**
+ Returns an user's bookmarks block.
+
+ @return array the paramter to pass to the block function.
+**/
+function theme_bookmarks2_block() {
+
+  global $user;
+
+  // Do not let anonymous users have bookmarks, even if the admin decides this
+  if ($user->uid != 0 && user_access('access bookmarks2')) {
+
+    $result = db_query('SELECT b.url, b.title, b.description FROM {bookmarks2} b WHERE b.uid = %d ORDER BY b.title', $user->uid);
+    $bookmarks = array();
+    while ($data = db_fetch_object($result)) {
+      $bookmarks[] = '<div class="icon">'. theme('bookmarks2_delete', $data->url) .'</div>'. _bookmarks2_get_link($data->url, $data->title, $data->description, true);
+    }
+
+    // Print bookmarks list as an item list
+    $output = (count($bookmarks) ? theme('item_list', $bookmarks) : t('You have no bookmarks.'));
+    $links = array(
+      l(t('quick link'), "bookmarks2/$user->uid/add/quick", array('title' => t('Bookmark the current page.')), 'title='. urlencode(drupal_get_title())),
+      l(t('manage'), "bookmarks2/$user->uid")
+    );
+    $output .= '<div class="links">'. theme('links', $links) .'</div>';
+
+    return array(
+      'subject' => t('%user\'s bookmarks', array('%user' => $user->name)),
+      'content' => $output
+    );
+  }
+
+  // Not a logged in user or has no rights
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ Returns a bookmarks delete icon.
+
+ @param bookmark_url The URL of the page to remove
+ @return string the delete icon to be emitted
+**/
+function theme_bookmarks2_delete($url) {
+  global $user;
+
+  $query = 'url=' . urlencode($url). '&block=1';
+  return l(theme('image', 'modules/bookmarks2/trash.gif', t('delete')), "bookmarks2/$user->uid/delete", array("title" => t("Delete this bookmark from your list.")), $query, NULL, FALSE, TRUE);
+}
+/**  @} End of addtogroup themeable **/
+
+/********************************************************************
+ * Module Functions
+ ********************************************************************/
+
+function bookmarks2_feed() {
+  global $user, $base_url;
+
+  $result = db_query('SELECT b.url, b.title, b.description FROM {bookmarks2} b WHERE b.uid = %d', $user->uid);
+
+  $title = variable_get('site_name', '');
+  $link = $base_url;
+  $description = t("%user's bookmarks", array('%user' => $user->name));
+
+  while ($obj = db_fetch_object($result)) {
+    if (!preg_match('@^\w+://.+@', $obj->url)) {
+      $obj->url = implode('/',array($base_url, $obj->url));
+    }
+    $body .= format_rss_item($obj->title, $obj->url, $obj->description);
+  }
+
+  $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+  $output .= "<!DOCTYPE rss [<!ENTITY % HTMLlat1 PUBLIC \"-//W3C//ENTITIES Latin1 for XHTML//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml-lat1.ent\">]>\n";
+  $output .= "<rss version=\"2.0\" xml:base=\"$base_url\">\n";
+  $output .= format_rss_channel($title, $link, $description, $body);
+  $output .= "</rss>\n";
+
+  drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  print $output;
+}
+
+/**
+ * The controller for managing bookmarks.  Callback happens via menu().
+ *
+ * @return string Completely themed HTML page.
+ */
+function bookmarks2_page() {
+  global $user;
+
+  $edit = $_POST['edit'];
+  $op   = $_POST['op'];
+
+  switch (($op ? $op : arg(2))) {
+    case 'add':
+      $title = t('Create new bookmark');
+      if (arg(3) == 'quick') {
+        $edit = bookmarks2_load_quicklink();
+      }
+      elseif (arg(3) == 'weblink') {
+        $edit = bookmarks2_load_weblink(arg(4));
+      }
+      $output = bookmarks2_form($edit);
+      break;
+
+    case 'edit':
+      $title = t('Edit bookmark');
+      $output = ($url = urldecode($_GET['url'])) ? bookmarks2_form(bookmarks2_load($url)) : drupal_set_message(t('Bookmark cannot be edited, because it is not in your list.'), 'error');
+      break;
+
+    case t('Save'):
+      $title = t('Bookmarks');
+      if (bookmarks2_validate($edit)) {
+        bookmarks2_save($edit);
+        drupal_goto("bookmarks2/$user->uid");
+      }
+      else {
+        $output = bookmarks2_form($edit);
+      }
+      break;
+
+    case 'folders' :
+      $title = t('Bookmark folders');
+      $output = bookmarks2_folder_overview();
+      break;
+
+    case 'addfolder':
+      $title = t('Create new folder');
+      $output = _bookmarks2_folder_form($edit);
+      break;
+
+    case 'folderedit':
+      $title = t('Edit folder');
+      $output = ($fid = $_GET['fid']) ? _bookmarks2_folder_form(_bookmarks2_folder_load($fid)) : drupal_set_message(t('Folder cannot be edited, because it is not in your list.'), 'error');
+      break;
+
+    case 'config':
+      $title = t('Configure bookmark preferences');
+      $output = _bookmarks2_config();
+      break;
+
+    case t('Save folder'):
+      $title = t('Folder');
+      _bookmarks2_folder_save($edit);
+      drupal_goto("bookmarks2/$user->uid/folders");
+      break;
+
+    case t('Save preferences'):
+      $title = t('Boomark preferences');
+      _bookmarks2_config_save($edit);
+      drupal_goto("bookmarks2/$user->uid");
+      break;
+
+    default:
+      $output = bookmarks2_overview();
+  }
+
+  $rss = '<link rel="alternate" type="application/rss+xml" title="'
+    .t("%user's bookmarks", array('%user' => $user->name))
+    .'" href="'. url(implode('/', array($_GET['q'], 'rss.xml'))) .'" />';
+
+  drupal_set_html_head($rss);
+
+  drupal_set_title($title);
+  print theme('page', $output);
+}
+
+function bookmarks2_delete() {
+  global $user;
+
+  if(!$_GET['url'] && $_GET['url'] != '0') {
+    drupal_set_message(t('Bookmark cannot be deleted, because no URL was specified.'), 'error');
+    return drupal_goto("bookmarks2/{$user->uid}");
+  }
+
+  $form['url'] = array('#type' => 'hidden', '#value' => $_GET['url']);
+  return confirm_form('bookmarks2_delete_confirm', $form, t('Are you sure you want to delete this bookmark?'), "bookmarks2/{$user->uid}", '', t('Delete'), t('Cancel'));
+}
+
+function bookmarks2_delete_confirm_submit($form_id, $form_values) {
+  global $user;
+
+  db_query("DELETE FROM {bookmarks2} WHERE uid = %d AND url = '%s'", $user->uid, urldecode($form_values['url']));
+  drupal_set_message(t('Deleted bookmark.'));
+
+  return "bookmarks2/{$user->uid}";
+}
+
+/**
+ * Menu callback; confirm deletion of folder.
+ *
+ * @todo name the folder in the question
+ */
+function bookmarks2_folder_delete() {
+  global $user;
+
+  if(!is_numeric($_GET['fid'])) {
+    drupal_set_message(t('Folder cannot be deleted, because no folder ID was specified.'), 'error');
+    return drupal_goto("bookmarks2/{$user->uid}");
+  }
+
+  $form['fid'] = array('#type' => 'hidden', '#value' => (int)$_GET['fid']);
+  return confirm_form('bookmarks2_folder_delete_confirm', $form, t('Are you sure you want to delete this folder?'), "bookmarks2/{$user->uid}", '', t('Delete'), t('Cancel'));
+}
+
+/**
+ * Delete a folder, all its children, and the associated bookmarks
+ *
+ * @param int $fid
+ * @return string
+ */
+function bookmarks2_folder_delete_confirm_submit($form_id, $form_values, $fid = 0, $child = false) {
+  global $user;
+
+  if($child) {
+    $result = db_query('SELECT f.fid FROM {bookmarks2_folders} f WHERE f.uid = %d AND f.fid = %d', $user->uid, $fid);
+    while($data = db_fetch_object($result)) {
+      db_query('DELETE FROM {bookmarks2} WHERE uid = %d AND fid = %d', $user->uid, $data->fid);
+      db_query('DELETE FROM {bookmarks2_folders} WHERE uid = %d AND fid = %d', $user->uid, $data->fid);
+      bookmarks2_folder_delete_confirm_submit(NULL, NULL, $data->fid, true);
+    }
+  }
+  else {
+    if(!is_numeric($form_values['fid'])) {
+      drupal_set_message(t('Folder ID is not the correct format!', 'error'));
+    }
+    else {
+
+      db_query('DELETE FROM {bookmarks2} WHERE uid = %d AND fid = %d', $user->uid, $form_values['fid']);
+      db_query('DELETE FROM {bookmarks2_folders} WHERE uid = %d AND fid = %d', $user->uid, $form_values['fid']);
+      bookmarks2_folder_delete_confirm_submit(NULL, NULL, $form_values['fid'], true);
+      drupal_set_message(t('Deleted bookmark folder.'));
+    }
+
+    return "bookmarks2/{$user->uid}";
+  }
+}
+
+function _bookmarks2_folder_select_options() {
+  $folders = _bookmarks2_folder_child(true);
+  if ($edit != NULL) {
+    $current_name = $folders[$edit['fid']];
+    $current_childs = array($edit['fid'] => $current_name);
+    _bookmarks2_folder_child_loop($edit['fid'], $current_childs, (strpos($current_name, '>') / 2));
+    $folders = array_diff_assoc($folders, $current_childs);
+  }
+  return $folders;
+}
+
+function bookmarks2_form($edit = null) {
+  $form['details'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Bookmark details')
+  );
+  $form['details']['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => $edit['title'],
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#description' => null,
+    '#attributes' => null,
+    '#required' => true
+  );
+  $form['details']['url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('URL'),
+    '#default_value' => $edit['url'],
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#description' => t('Enter the address of the page you want to bookmark. This can be an internal or external reference.'),
+    '#attributes' => null,
+    '#required' => true
+  );
+  $form['details']['description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => $edit['description'],
+    '#rows' => 4,
+    '#cols' => 68,
+    '#description' => t('Optionally enter a description for this bookmark for reference later.'),
+    '#required' => false
+  );
+  $form['details']['fid'] = array(
+    '#type' => 'select',
+    '#title' => t('Parent folder'),
+    '#options' => _bookmarks2_folder_select_options(),
+    '#default_value' => $edit['fid'],
+    '#multiple' => false,
+    '#required' => true
+  );
+  $form['old_url'] = array(
+    '#type' => 'hidden',
+    '#value' => urlencode($edit['url'])
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save')
+  );
+  return drupal_get_form('bookmarks2_form', $form);
+}
+
+function _bookmarks2_folder_form($edit = null) {
+  $form['details'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Folder details')
+  );
+  $form['details']['fname'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Folder name'),
+    '#default_value' => $edit['fname'],
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#required' => true
+  );
+  $form['details']['f_parent_id'] = array(
+    '#type' => 'select',
+    '#title' => t('Parent folder'),
+    '#options' => _bookmarks2_folder_select_options(),
+    '#default_value' => $edit['f_parent_id'],
+    '#multiple' => false,
+    '#required' => true
+  );
+  $form['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $edit['fid']
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Save folder'
+  );
+
+  return drupal_get_form('bookmarks2_folder_form', $form);
+}
+
+/**
+ * lets individuals set preferences for bookmarks
+ *
+ */
+function _bookmarks2_config() {
+  $form['link_display'] = array(
+    '#type' => 'radios',
+    '#title' => t('Link display'),
+    '#default_value' => _bookmarks2_user_pref('link_display', 0),
+    '#options' => array(t('Title and link separate'), t('Title as link')),
+    '#description' => t('Either show the bookmark name as a link, or the title with the URL as a separate link')
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Save preferences'
+  );
+
+  return drupal_get_form('_bookmarks2_config', $form);
+}
+
+function _bookmarks2_user_pref($var, $default) {
+  static $options;
+
+  if(!isset($options)) {
+    $options = db_result(db_query("SELECT options FROM {bookmarks2_prefs} WHERE uid = %d", $GLOBALS['user']->uid));
+  }
+  $definitions = array(
+    'link_display' => 1 // display link title as link
+  );
+  return $options ? $options & $definitions[$var] : $default;
+}
+
+/**
+ * Write prefs to db
+ *
+ * @see _bookmarks2_config()
+ * @param array $edit
+ */
+function _bookmarks2_config_save($edit) {
+  global $user;
+
+  $options = 0;
+  $options |= $edit['link_display'];
+
+  if (db_result(db_query("SELECT COUNT(options) FROM {bookmarks2_prefs} WHERE uid = %d", $user->uid))) {
+    db_query("UPDATE {bookmarks2_prefs} SET options = %d WHERE uid = %d", $options, $user->uid);
+  } else {
+    db_query("INSERT INTO {bookmarks2_prefs} (uid, options) VALUES (%d, %d)", $user->uid, $options);
+  }
+  drupal_set_message(t('Bookmark preferences have been updated.'));
+}
+
+function bookmarks2_load($url) {
+  global $user;
+  return db_fetch_array(db_query("SELECT * FROM {bookmarks2} WHERE uid = %d AND url = '%s'", $user->uid, $url));
+}
+
+function _bookmarks2_folder_load($fid) {
+  global $user;
+  return db_fetch_array(db_query("SELECT * FROM {bookmarks2_folders} WHERE uid = %d AND fid = %d", $user->uid, $fid));
+}
+
+function bookmarks2_load_quicklink() {
+
+  $edit['url'] = bookmarks2_get_canonical_path($url);
+  $explicit_uri = drupal_get_normal_path($edit['url']);
+
+  $uri_ary = explode('/', $explicit_uri);
+  $type = $uri_ary[0];
+  foreach ($uri_ary as $value) {
+    if (is_numeric($value)) {
+      $id = $value;
+      break;
+    }
+  }
+
+  /* Only display quicklink title for internal URLs */
+  if (is_numeric($id) && !strstr($edit['url'], 'http://')) {
+    switch ($type) {
+      case 'node':
+        $edit['title'] = db_result(db_query('SELECT title FROM {node} n WHERE nid = %d', $id));
+        break;
+      case 'comment':
+        $edit['title'] = db_result(db_query('SELECT subject FROM {comments} WHERE cid = %d', $id));
+        break;
+      case 'user':
+        $edit['title'] = db_result(db_query('SELECT name FROM {users} WHERE uid = %d', $id));
+        break;
+      default:
+        /* Leave the title blank. The user will be prompted to enter a title. */
+    }
+  }
+
+  if (!$edit['title']) {
+    $edit['title'] = urldecode($_GET['title']);
+  }
+
+  return $edit;
+}
+
+function bookmarks2_load_weblink($nid) {
+  return db_fetch_array(db_query('SELECT n.title, w.weblink url FROM {node} n, {weblink} w WHERE n.nid = w.nid AND n.nid = %d', $nid));
+}
+
+function bookmarks2_overview() {
+  global $user;
+
+  $link_display = _bookmarks2_user_pref('link_display', 0);
+
+  $output = _bookmarks2_overview_folders($link_display);
+
+  $header = array();
+  $header[] = array('data' => t('title'), 'field' => 'title', 'sort' => 'asc');
+  if(!$link_display) {
+    $header[] = array('data' => t('link'), 'field' => 'url');
+  }
+  $header[] = array('data' => t('operations'), 'colspan' => 2);
+
+  $sql = 'SELECT b.url, b.title, b.description FROM {bookmarks2} b WHERE b.uid = '. db_escape_string($user->uid) .' AND b.fid = 0 '. tablesort_sql($header);
+  $result = pager_query($sql, 50);
+
+  $rows = array();
+
+  while ($data = db_fetch_object($result)) {
+    if($link_display) {
+      $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+    } else {
+      $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+    }
+  }
+
+  $pager = theme('pager', null, 50, 0, tablesort_pager());
+  if (!empty($pager)) {
+    $rows[] = array(array('data' => $pager, 'colspan' => $link_display ? 3 : 4));
+  }
+
+  $output .= (count($rows) == 0) ? t('You have no bookmarks.') : theme('table', $header, $rows);
+  return $output;
+}
+
+function _bookmarks2_overview_folders($link_display, $fid = 0) {
+  global $user;
+
+  $form = array();
+  // having all these queries probably isn't the most efficient way of doing this
+  $f_result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d', $fid, $user->uid);
+  while ($folder_data = db_fetch_object($f_result)) {
+    if(!isset($form[$folder_data->fid])) {
+      $form[$folder_data->fid] = array(
+        '#type' => 'fieldset',
+        '#title' => check_plain($folder_data->fname),
+        '#collapsible' => true,
+        '#collapsed' => true
+      );
+    }
+    if($child = _bookmarks2_overview_folders($link_display, $folder_data->fid)) {
+      $form[$folder_data->fid]['child'] = array(
+        '#value' => $child
+      );
+    }
+    if($bm_result = db_query('SELECT b.url, b.title, b.description FROM {bookmarks2} b WHERE b.uid = %d AND b.fid = %d', $user->uid, $folder_data->fid)) {
+      $header = array();
+      $header[] = array('data' => t('title'), 'field' => 'title', 'sort' => 'asc');
+      if(!$link_display) {
+        $header[] = array('data' => t('link'), 'field' => 'url');
+      }
+      $header[] = array('data' => t('operations'), 'colspan' => 2);
+
+      $rows = array();
+
+      while ($data = db_fetch_object($bm_result)) {
+        if($link_display) {
+          $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $link_display),'&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+        } else {
+          $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+        }
+      }
+      $form[$folder_data->fid][$data->url] = array(
+        '#value' => theme('table', $header, $rows)
+      );
+    }
+  }
+  return drupal_get_form('bookmark_folders', $form);
+}
+
+function bookmarks2_folder_overview() {
+  global $user;
+
+  $header = array(
+    array('data' => t('fname')),
+    array('data' => t('operations'), 'colspan' => 2)
+  );
+
+  $folders = _bookmarks2_folder_child();
+
+  while(list($key, $value) = each($folders)) {
+    $fname = (strlen($value) > 50) ? substr($value, 0, 47). '...' : $value;
+    $rows[] = array($value, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/folderedit", null, 'fid=' . $key).' '. l(t('delete'), "bookmarks2/$user->uid/deletefolder", null, 'fid=' . $key));
+  }
+
+  $output .= (count($rows) == 0) ? t('You have no folders.') : theme('table', $header, $rows);
+  return $output;
+}
+
+function _bookmarks2_folder_child($inc_top = false) {
+  global $user;
+
+  $folder_tree = $inc_top == true ? array(0 => '['. t('Top level') .']') : array();
+
+  $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = 0 AND f.uid = %d', $user->uid);
+  while ($data = db_fetch_object($result)) {
+    if($_GET['fid'] != $data->fid) {
+      $folder_tree[$data->fid] = $data->fname;
+      _bookmarks2_folder_child_loop($data->fid, $folder_tree, 0);
+    }
+  }
+  return $folder_tree;
+}
+
+function _bookmarks2_folder_child_loop($fid, &$folder_array, $i) {
+  global $user;
+
+  $i++; // should this be static?
+  $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d', $fid, $user->uid);
+  while ($data = db_fetch_object($result)) {
+    $folder_array[$data->fid] = str_repeat('-', 2*$i) . ' ' . $data->fname;
+    if($data->fid != $fid) {
+      _bookmarks2_folder_child_loop($data->fid, $folder_array, $i);
+    }
+  }
+}
+
+function bookmarks2_save($edit) {
+  global $user;
+
+  $edit['old_url'] = urldecode($edit['old_url']);
+  if ($edit['old_url'] && db_result(db_query("SELECT COUNT(b.uid) FROM {bookmarks2} b WHERE b.uid = %d AND b.url = '%s'", $user->uid, $edit['old_url']))) {
+    db_query("UPDATE {bookmarks2} SET fid = %d, title = '%s', url = '%s', description = '%s' WHERE uid = %d AND url = '%s'", $edit['fid'], $edit['title'], $edit['url'], $edit['description'], $user->uid, $edit['old_url']);
+    drupal_set_message(t('The bookmark has been updated.'));
+  }
+  else {
+    db_query("INSERT INTO {bookmarks2} (uid, fid, url, title, description) VALUES (%d, %d, '%s', '%s', '%s')", $user->uid, $edit['fid'], $edit['url'], $edit['title'], $edit['description']);
+    drupal_set_message(t('The link has been added to your bookmarks.'));
+  }
+}
+
+function _bookmarks2_folder_save($edit) {
+  global $user;
+
+  if (db_result(db_query("SELECT COUNT(fid) FROM {bookmarks2_folders} WHERE fid = %d AND uid = %d", $edit['fid'], $user->uid))) {
+    db_query("UPDATE {bookmarks2_folders} SET fname = '%s', f_parent_id = %d WHERE uid = %d AND fid = %d", $edit['fname'], $edit['f_parent_id'], $user->uid, $edit['fid']);
+    drupal_set_message(t('The folder has been updated.'));
+  } else {
+    db_query("INSERT INTO {bookmarks2_folders} (uid, f_parent_id, fname) VALUES (%d, %d, '%s')", $user->uid, $edit['f_parent_id'], $edit['fname']);
+    drupal_set_message(t('The folder has been added to your bookmarks.'));
+  }
+}
+
+/**
+ * Administration settings to turn on password reminder or not
+ *
+ * @return array
+ */
+function bookmarks2_settings() {
+  $form = array();
+  $form['bookmarks2_link_crop_size'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Link crop length'),
+    '#description' => t('The display of links will be cropped to this length in characters.'),
+    '#size' => 5,
+    '#maxlength' => 5,
+    '#default_value' => variable_get('bookmarks2_link_crop_size', 50)
+  );
+  return $form;
+}
+
+function bookmarks2_validate($edit) {
+  $errors = array();
+
+  if (isset($edit['title']) && !$edit['title']) {
+    $errors['title'] = t('You must supply a title.');
+  }
+  if (isset($edit['url']) && !$edit['url']) {
+    $errors['url'] = t('You must supply an URL.');
+  }
+
+  foreach ($errors as $name => $message) {
+    form_set_error($name, $message);
+  }
+  return count($errors) == 0;
+}
+
+/**
+ * Return a relative URI that Drupal can recognize internally.
+ *
+ * @return string
+ */
+function bookmarks2_get_canonical_path($url) {
+  global $base_url;
+
+  $c_path = ltrim(str_replace($base_url, '', trim(referer_uri(), '/')), '/');
+  $c_path = str_replace('index.php', '', $c_path);
+  $c_path = str_replace('?q=', '', $c_path);
+
+  return $c_path;
+}
+
+/**
+ * Generate a link based on the URL being internal or external
+ *
+ * @return string
+ */
+function _bookmarks2_get_link($url, $title, $description, $link_display = false) {
+  $crop = variable_get('bookmarks2_link_crop_size', 50);
+  if($link_display) {
+    $title = (strlen($title) > $crop) ? substr($title, 0, $crop - 3). '...' : check_plain($title);
+  } else {
+    $title = (strlen($url) > $crop) ? substr($url, 0, $crop - 3). '...' : check_plain($url);
+  }
+  return (preg_match("!^[a-zA-Z]+://!", $url)) ? "<a href=\"$url\" title=\"". check_plain($description) ."\">$title</a>" : l($title, $url);
+}
+
+function _bookmarks2_mcrypt_ok() {
+  return function_exists('mcrypt_encrypt') && defined(MCRYPT_RIJNDAEL_256);
+}
+
+function _bookmarks2_mhash_ok() {
+  return function_exists('mhash') && defined(MHASH_SHA256);
+}
+
+?>
