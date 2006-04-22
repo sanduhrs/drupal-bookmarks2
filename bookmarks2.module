@@ -55,7 +55,7 @@ function bookmarks2_menu($may_cache) {
 
   // Main menu item
   $items[] = array('path' => "bookmarks2/$user->uid", 'title' => t('my bookmarks'),
-                    'callback' => 'bookmarks2_page', 'access' => $access);
+                    'callback' => 'bookmarks2_page', 'access' => $access, 'type' => MENU_NORMAL_ITEM);
 
   // Top level tabs
   $items[] = array('path' => "bookmarks2/$user->uid/overview", 'title' => t('list'),
@@ -603,7 +603,7 @@ function bookmarks2_overview() {
     }
   }
 
-  $pager = theme('pager', null, 50, 0, tablesort_pager());
+  $pager = theme('pager', null, 50, 0);
   if (!empty($pager)) {
     $rows[] = array(array('data' => $pager, 'colspan' => $link_display ? 3 : 4));
   }
