@@ -5,8 +5,12 @@
  * @file
  * Lets users keep bookmarks
  *
+ * @author David Kent Norman <deekayen {at} deekayen -dot= net>
+ * @link http://deekayen.net/
  * @todo There's some code/functionality duplication to eliminate
  *       Callbacks are underutilized
+ *       add option to submit key by SSL
+ *       password reminder re-encryption if users enter their old key with a new key
  */
 
 /********************************************************************
@@ -95,71 +99,6 @@ function bookmarks2_menu($may_cache) {
  */
 function bookmarks2_perm() {
   return array('access bookmarks2');
-}
-
-/**
- * @deprecated Probably moving to bookmarks2_config()
- */
-function bookmarks2_user() {
-  global $user;
-
-  if ($account = user_load(array('uid' => arg(1), 'status' => 1))) {
-    $edit = $_POST['edit'];
-
-    if ($edit) {
-      if (!$edit['username']) {
-        form_set_error('username', t('You must enter a username.'));
-      }
-      if (!isset($edit['endentry']) || !is_numeric($edit['endentry'])) {
-        form_set_error('endentry', t('You must enter an ending entry.'));
-      }
-
-      if (!form_get_errors()) {
-        if(variable_get('bookmarks2_login_reminder_enabled', 0)) {
-          $hash = _bookmarks2_hash_key($edit['bookmarks2_login_reminder_key']);
-          if (db_result(db_query('SELECT COUNT(uid) FROM {bookmarks2_prefs} WHERE uid = %d', $user->uid))) {
-            db_query("UPDATE {bookmarks2_prefs} SET pword_hash = '%s' WHERE uid = %d)", $hash, $account->uid);
-            db_query("UPDATE {bookmarks2} SET pword = NULL WHERE uid = %d)", $account->uid);
-            drupal_set_message(t('All stored password reminders deleted.'));
-          } else {
-            db_query("INSERT INTO {bookmarks2_prefs} (uid, pword_hash) VALUES (%d, '%s')", $account->uid, $hash);
-          }
-          drupal_set_message(t('Your password reminder key has been encrypted and stored.'));
-        }
-
-        drupal_goto("user/$account->uid");
-      }
-    }
-
-    if(variable_get('bookmarks2_login_reminder_enabled', 0)) {
-      $form['bookmarks2_login_reminder_key'] = array(
-        '#type' => 'textfield',
-        '#title' => t('Login reminder key'),
-        '#default_value' => isset($edit['username']) ? $edit['username'] : '',
-        '#description' => t("This key will be used to encrypt your login reminder passwords. You will need to enter it each time you save or view a login reminder's password. <strong>NOTE! Submitting a value here will erase all stored passwords!</strong>"),
-        '#size' => 20,
-        '#maxlength' => 50,
-        '#required' => false
-      );
-    }
-    $form['bookmarks2_link_display'] = array(
-      '#type' => 'radios',
-      '#title' => t('Link display'),
-      '#default_value' => _bookmarks2_user_pref('bookmarks2_link_display', 0),
-      '#options' => array(t('Title and link separate'), t('Title as link')),
-      '#description' => t('Either show the bookmark name as a link, or the title with the URL as a separate link')
-    );
-    $form['bookmarks2_save_preferences'] = array(
-      '#type' => 'submit',
-      '#value' => t('Save bookmark preferences')
-    );
-
-    print theme('page', drupal_get_form('bookmarks2_user', $form));
-  }
-  else {
-    drupal_not_found();
-  }
-
 }
 
 /**
@@ -468,39 +407,43 @@ function bookmarks2_form($edit = null) {
     '#description' => t('Optionally enter a description for this bookmark for reference later.'),
     '#required' => false
   );
-  $form['details']['reminder'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Login reminder'),
-    '#collapsible' => true,
-    '#collapsed' => true
-  );
-  $form['details']['reminder']['uname'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Bookmark URL username'),
-    '#default_value' => $edit['uname'],
-    '#size' => 60,
-    '#maxlength' => 80,
-    '#description' => t('Username is stored in plaintext'),
-    '#required' => false
-  );
-  $form['details']['reminder']['pword'] = array(
-    '#type' => 'password',
-    '#title' => t('Bookmark URL password'),
-    '#default_value' => '',
-    '#size' => 60,
-    '#maxlength' => 255,
-    '#description' => t('Password will be secured with 256-bit encryption when stored.'),
-    '#required' => false
-  );
-  $form['details']['reminder']['drupal_pword'] = array(
-    '#type' => 'password',
-    '#title' => t('Login password'),
-    '#default_value' => $edit['drupal_pword'],
-    '#size' => 60,
-    '#maxlength' => 255,
-    '#description' => t('Password you used to login to this website. It will be used to encrypt and decrypt your bookmark login reminder.'),
-    '#required' => false
-  );
+  if (variable_get('bookmarks2_login_reminder_enabled', false) && _bookmarks2_crypt_ok()) {
+    $form['details']['reminder'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Login reminder'),
+      '#collapsible' => true,
+      '#collapsed' => true
+    );
+    $form['details']['reminder']['uname'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Bookmark URL username'),
+      '#default_value' => $edit['uname'],
+      '#size' => 60,
+      '#maxlength' => 80,
+      '#description' => t('Username is stored in plaintext'),
+      '#required' => false
+    );
+    if (_bookmarks2_key_isset()) {
+      $form['details']['reminder']['pword'] = array(
+        '#type' => 'password',
+        '#title' => t('Bookmark URL password'),
+        '#default_value' => '',
+        '#size' => 60,
+        '#maxlength' => 255,
+        '#description' => t('Password will be secured with 256-bit encryption when stored.'),
+        '#required' => false
+      );
+      $form['details']['reminder']['key'] = array(
+        '#type' => 'password',
+        '#title' => t('Password locking key'),
+        '#default_value' => '',
+        '#size' => 60,
+        '#maxlength' => 255,
+        '#description' => t('This key is used to secure your password reminder with 256-bit encryption. It was set in your bookmark preferences.'),
+        '#required' => false
+      );
+    }
+  }
   $form['details']['fid'] = array(
     '#type' => 'select',
     '#title' => t('Parent folder'),
@@ -560,7 +503,7 @@ function _bookmarks2_folder_form($edit = null) {
 }
 
 /**
- * lets individuals set preferences for bookmarks
+ * lets individuals set preferences for bookmarks in the bookmark preferences tab
  *
  * @return string
  */
@@ -572,9 +515,28 @@ function _bookmarks2_config() {
     '#options' => array(t('Title and link separate'), t('Title as link')),
     '#description' => t('Either show the bookmark name as a link, or the title with the URL as a separate link')
   );
+  if (variable_get('bookmarks2_login_reminder_enabled', false) && _bookmarks2_crypt_ok()) {
+    $form['details']['reminder'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Login reminder'),
+      '#collapsible' => true,
+      '#collapsed' => true
+    );
+    $key_set = _bookmarks2_key_isset();
+    $form['details']['reminder']['key'] = array(
+      '#type' => 'password',
+      '#title' => t('Password lock/unlock key'),
+      '#default_value' => '',
+      '#size' => 60,
+      '#maxlength' => 255,
+      '#description' => t('The key is currently <em style="color: %color">%set</em>. ', array('%set' => $key_set ? t('set') : t('not set'), '%color' => $key_set ? 'green' : 'red')) .
+                        t('This key will be scrambled with 256-bit, one-way encryption and will be needed to lock and unlock your password reminders. If you submit a new key when one is already set, all your password reminders <strong>will be deleted</strong> because the new key will not be a valid verification for decrypting your stored passwords.'),
+      '#required' => false
+    );
+  }
   $form['submit'] = array(
     '#type' => 'submit',
-    '#value' => 'Save preferences'
+    '#value' => 'Save bookmark preferences'
   );
 
   return drupal_get_form('_bookmarks2_config', $form);
@@ -610,11 +572,22 @@ function _bookmarks2_config_save($edit) {
 
   $options = 0;
   $options |= $edit['link_display'];
+  $key = false;
+  $existing_key = _bookmarks2_fetch_key();
 
-  if (db_result(db_query("SELECT COUNT(options) FROM {bookmarks2_prefs} WHERE uid = %d", $user->uid))) {
-    db_query("UPDATE {bookmarks2_prefs} SET options = %d WHERE uid = %d", $options, $user->uid);
-  } else {
-    db_query("INSERT INTO {bookmarks2_prefs} (uid, options) VALUES (%d, %d)", $user->uid, $options);
+  if ($existing_key && empty($edit['key'])) {
+    $key = $existing_key;
+  }
+  elseif(!empty($edit['key'])) {
+    $key = _bookmarks2_hash_key($edit['key']);
+    db_query("UPDATE {bookmarks2} SET pword = '' WHERE uid = %d", $user->uid);
+  }
+
+  if ($key) {
+    db_query("REPLACE INTO {bookmarks2_prefs} (uid, options, pword_key) VALUES (%d, %d, '%s')", $user->uid, $options, $key);
+  }
+  else {
+    db_query("REPLACE INTO {bookmarks2_prefs} (uid, options) VALUES (%d, %d)", $user->uid, $options);
   }
   drupal_set_message(t('Bookmark preferences have been updated.'));
 }
@@ -694,31 +667,81 @@ function bookmarks2_load_weblink($nid) {
   return db_fetch_array(db_query('SELECT n.title, w.weblink url FROM {node} n, {weblink} w WHERE n.nid = w.nid AND n.nid = %d', $nid));
 }
 
+/**
+ * Main bookmark list
+ *
+ * @return string
+ */
 function bookmarks2_overview() {
   global $user;
+  $key = isset($_POST['edit']['overview_key']) ? $_POST['edit']['overview_key'] : '';
 
+  $output = '';
+  $header = array();
+  $crypt_ok = _bookmarks2_crypt_ok() && variable_get('bookmarks2_login_reminder_enabled', 0);
+  $good_key = _bookmarks2_check_key($key);
+  if ($key && !$good_key) {
+    drupal_set_message(t('Password reminder key incorrect! Password reminders will not be shown.'), 'error');
+  }
   $link_display = _bookmarks2_user_pref('link_display', 0);
 
-  $output = _bookmarks2_overview_folders($link_display);
-
-  $header = array();
   $header[] = array('data' => t('title'), 'field' => 'title', 'sort' => 'asc');
-  if(!$link_display) {
+  if (!$link_display) {
     $header[] = array('data' => t('link'), 'field' => 'url');
   }
-  if(_bookmarks2_mcrypt_ok() && variable_get('bookmarks2_login_reminder_enabled', 0)) {
+  if ($crypt_ok) {
+/*
+    $form['key_holder'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Reveal password reminders'),
+      '#collapsible' => true, '#collapsed' => true
+    );
+    $form['key_holder']['key'] = array(
+      '#type' => 'password',
+      '#size' => 20,
+      '#description' => t('Enter your password reminder key to decrypt and reveal your saved passwords')
+    );
+    $form['key_holder']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Display password reminders')
+    );
+    $output .= drupal_get_form('bookmarks2_key', $form);
+//    die(var_dump($_POST)); // outputs an empty array after a form submission
+*/
+    // this is the output of the above $form since drupal_get_form is making $key disappear in a HTTP redirect or something
+    if (_bookmarks2_key_isset()) {
+      $output .= '<form action="" method="post" id="bookmarks2_key">
+<div><fieldset class=" collapsible"><legend>'. t('Reveal password reminders') .'</legend><div class="form-item">
+ <input type="password" maxlength="" name="edit[overview_key]" id="edit-key"  size="20"  class="form-text" />
+ <div class="description">'. t('Enter your password reminder key to decrypt and reveal your saved passwords') .'</div>
+</div><input type="submit" name="op" value="'. t('Display password reminders') .'" class="form-submit" />
+</fieldset></div></form>';
+    }
     $header[] = array('data' => t('username'), 'field' => 'uname');
     $header[] = array('data' => t('password'), 'field' => 'pword');
+    if ($good_key) {
+      drupal_set_header('Pragma: no-cache');
+      drupal_set_header('Cache-Control: no-cache');
+      drupal_set_html_head('<meta http-equiv="Pragma" content="no-cache" /><meta http-equiv="Expires" content="-1" /><meta http-equiv="Cache-Control" content="no-cache" />');
+    }
   }
   $header[] = array('data' => t('operations'), 'colspan' => 2);
 
-  $sql = 'SELECT b.url, b.title, b.description, b.uname, b.pword, b.options FROM {bookmarks2} b WHERE b.uid = '. db_escape_string($user->uid) .' AND b.fid = 0 '. tablesort_sql($header);
-  $result = pager_query($sql, 50);
+  $result = db_query('SELECT b.url, b.title, b.description, b.uname, b.pword, b.options FROM {bookmarks2} b WHERE b.uid = '. db_escape_string($user->uid) .' AND b.fid = 0 '. tablesort_sql($header));
 
   $rows = array();
 
   while ($data = db_fetch_object($result)) {
-    if(_bookmarks2_mcrypt_ok() && variable_get('bookmarks2_login_reminder_enabled', 0)) {
+    if ($crypt_ok) {
+      if (empty($data->pword)) {
+        $decrypted_pword = '';
+      }
+      elseif ($good_key) {
+        $decrypted_pword = _bookmarks2_decrypt_pword($key, $data->pword);
+      }
+      else {
+        $decrypted_pword = '<em>'. t('hidden') .'</em>';
+      }
       if($link_display) {
         $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
       } else {
@@ -733,11 +756,7 @@ function bookmarks2_overview() {
     }
   }
 
-  $pager = theme('pager', null, 50, 0);
-  if (!empty($pager)) {
-    $rows[] = array(array('data' => $pager, 'colspan' => $link_display ? 3 : 4));
-  }
-
+  $output .= _bookmarks2_overview_folders($link_display);
   $output .= (count($rows) == 0) ? t('You have no bookmarks.') : theme('table', $header, $rows);
   return $output;
 }
@@ -867,15 +886,19 @@ function _bookmarks2_folder_child_loop($fid, &$folder_array, $i) {
 function bookmarks2_save($edit) {
   global $user;
 
+  $encrypted_pword = '';
   $options = 0;
   $options |= ($edit['_blank']) ? $edit['_blank'] : 0;
 
-  if($edit['pword'] && $edit['drupal_pword']) {
-    $encrypted_pword = _bookmarks2_encrypt_pword($edit['drupal_pword'], $edit['pword']);
+  if($edit['pword'] && $edit['key']) {
+    $encrypted_pword = _bookmarks2_encrypt_pword($edit['key'], $edit['pword']);
   }
 
   $edit['old_url'] = urldecode($edit['old_url']);
   if ($edit['old_url'] && db_result(db_query("SELECT COUNT(b.uid) FROM {bookmarks2} b WHERE b.uid = %d AND b.url = '%s'", $user->uid, $edit['old_url']))) {
+    if(!$edit['pword'] && !$edit['key']) {
+      $encrypted_pword = db_result(db_query("SELECT pword FROM {bookmarks2} b WHERE b.uid = %d AND b.url = '%s'", $user->uid, $edit['old_url']));
+    }
     db_query("UPDATE {bookmarks2} SET fid = %d, title = '%s', url = '%s', description = '%s', uname = '%s', pword = '%s', options = %d WHERE uid = %d AND url = '%s'", $edit['fid'], $edit['title'], $edit['url'], $edit['description'], $edit['uname'], $encrypted_pword, $options, $user->uid, $edit['old_url']);
     drupal_set_message(t('The bookmark has been updated.'));
   }
@@ -917,7 +940,7 @@ function bookmarks2_settings() {
     '#maxlength' => 5,
     '#default_value' => variable_get('bookmarks2_link_crop_size', 50)
   );
-  if(_bookmarks2_mhash_ok() && _bookmarks2_mcrypt_ok()) {
+  if(_bookmarks2_crypt_ok()) {
     $form['bookmarks2_login_reminder_enabled'] = array(
       '#type' => 'radios',
       '#title' => t('Enable login reminder support'),
@@ -947,11 +970,11 @@ function bookmarks2_validate($edit) {
   if (isset($edit['url']) && !$edit['url']) {
     $errors['url'] = t('You must supply an URL.');
   }
-  if (isset($edit['pword']) && $edit['pword'] && (!isset($edit['drupal_pword']) || !$edit['drupal_pword'])) {
-    $errors['drupal_pword'] = t('You must supply the password you used to login to this site to encrypt the password for your login reminder.');
+  if (isset($edit['pword']) && $edit['pword'] && (!isset($edit['key']) || !$edit['key'])) {
+    $errors['key'] = t('You must supply your bookmark reminder key to encrypt the password for your login reminder.');
   }
-  elseif($edit['drupal_pword'] && _bookmarks2_hash_key($edit['drupal_pword']) == false) {
-    $errors['drupal_pword'] = t('The password you supplied to login to this website does not match the on record.');
+  elseif($edit['key'] && !_bookmarks2_check_key($edit['key'])) {
+    $errors['key'] = t('The reminder key you supplied does not match the one on record.');
   }
 
   foreach ($errors as $name => $message) {
@@ -995,17 +1018,28 @@ function _bookmarks2_get_link($url, $title, $description, $options, $link_displa
  *
  * @return bool
  */
-function _bookmarks2_mcrypt_ok() {
-  return function_exists('mcrypt_encrypt') && defined('MCRYPT_RIJNDAEL_256');
+function _bookmarks2_crypt_ok() {
+  return function_exists('mhash') && defined('MHASH_SHA256') && function_exists('mcrypt_encrypt') && defined('MCRYPT_RIJNDAEL_256');
 }
 
 /**
- * Check if mhash extension is installed and supports SHA-256
+ * Check to see if the key is already stored
  *
- * @return bool
+ * @return string
  */
-function _bookmarks2_mhash_ok() {
-  return function_exists('mhash') && defined('MHASH_SHA256');
+function _bookmarks2_key_isset() {
+  global $user;
+  return db_result(db_query('SELECT COUNT(pword_key) FROM {bookmarks2_prefs} WHERE uid = %d AND pword_key IS NOT NULL', $user->uid));
+}
+
+/**
+ * Get existing key
+ *
+ * @return string binary hash
+ */
+function _bookmarks2_fetch_key() {
+  global $user;
+  return db_result(db_query('SELECT pword_key FROM {bookmarks2_prefs} WHERE uid = %d', $user->uid));
 }
 
 /**
@@ -1038,6 +1072,16 @@ function _bookmarks2_decrypt_pword($key, $encrypted_pword) {
  */
 function _bookmarks2_hash_key($key) {
   return mhash(MHASH_SHA256, $key);
+}
+
+/**
+ * Check to see if the key from a form submission matches the stored key
+ *
+ * @param string $key
+ * @return bool true when the key is valid
+ */
+function _bookmarks2_check_key($key) {
+  return strcmp(_bookmarks2_fetch_key(), _bookmarks2_hash_key($key)) === 0;
 }
 
 ?>

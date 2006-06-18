@@ -30,7 +30,17 @@ function bookmarks2_install() {
       db_query("CREATE TABLE bookmarks2_prefs (
         uid int(10) unsigned NOT NULL,
         options tinyint(3) unsigned NOT NULL default '0',
-        pword_hash varbinary(255) default NULL,
+        pword_key varbinary(100) NULL DEFAULT NULL,
         PRIMARY KEY (uid))");
   }
+}
+
+function bookmarks2_update_1() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      $ret[] = update_sql("ALTER TABLE bookmarks2_prefs CHANGE pword_hash pword_key VARBINARY(100) NULL DEFAULT NULL");
+  }
+  return $ret;
 }
