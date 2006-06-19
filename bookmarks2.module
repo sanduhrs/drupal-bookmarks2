@@ -275,7 +275,7 @@ function bookmarks2_page() {
 function bookmarks2_delete() {
   global $user;
 
-  if(!$_GET['url'] && $_GET['url'] != '0') {
+  if (!$_GET['url'] && $_GET['url'] != '0') {
     drupal_set_message(t('Bookmark cannot be deleted, because no URL was specified.'), 'error');
     return drupal_goto("bookmarks2/{$user->uid}");
   }
@@ -308,7 +308,7 @@ function bookmarks2_delete_confirm_submit($form_id, $form_values) {
 function bookmarks2_folder_delete() {
   global $user;
 
-  if(!is_numeric($_GET['fid'])) {
+  if (!is_numeric($_GET['fid'])) {
     drupal_set_message(t('Folder cannot be deleted, because no folder ID was specified.'), 'error');
     return drupal_goto("bookmarks2/{$user->uid}");
   }
@@ -326,7 +326,7 @@ function bookmarks2_folder_delete() {
 function bookmarks2_folder_delete_confirm_submit($form_id, $form_values, $fid = 0, $child = false) {
   global $user;
 
-  if($child) {
+  if ($child) {
     $result = db_query('SELECT f.fid FROM {bookmarks2_folders} f WHERE f.uid = %d AND f.fid = %d', $user->uid, $fid);
     while($data = db_fetch_object($result)) {
       db_query('DELETE FROM {bookmarks2} WHERE uid = %d AND fid = %d', $user->uid, $data->fid);
@@ -335,7 +335,7 @@ function bookmarks2_folder_delete_confirm_submit($form_id, $form_values, $fid = 
     }
   }
   else {
-    if(!is_numeric($form_values['fid'])) {
+    if (!is_numeric($form_values['fid'])) {
       drupal_set_message(t('Folder ID is not the correct format!', 'error'));
     }
     else {
@@ -552,7 +552,7 @@ function _bookmarks2_config() {
 function _bookmarks2_user_pref($var, $default) {
   static $options;
 
-  if(!isset($options)) {
+  if (!isset($options)) {
     $options = db_result(db_query("SELECT options FROM {bookmarks2_prefs} WHERE uid = %d", $GLOBALS['user']->uid));
   }
   $definitions = array(
@@ -578,7 +578,7 @@ function _bookmarks2_config_save($edit) {
   if ($existing_key && empty($edit['key'])) {
     $key = $existing_key;
   }
-  elseif(!empty($edit['key'])) {
+  elseif (!empty($edit['key'])) {
     $key = _bookmarks2_hash_key($edit['key']);
     db_query("UPDATE {bookmarks2} SET pword = '' WHERE uid = %d", $user->uid);
   }
@@ -742,13 +742,13 @@ function bookmarks2_overview() {
       else {
         $decrypted_pword = '<em>'. t('hidden') .'</em>';
       }
-      if($link_display) {
+      if ($link_display) {
         $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
       } else {
         $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
       }
     } else {
-      if($link_display) {
+      if ($link_display) {
         $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
       } else {
         $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
@@ -756,7 +756,7 @@ function bookmarks2_overview() {
     }
   }
 
-  $output .= _bookmarks2_overview_folders($link_display);
+  $output .= _bookmarks2_overview_folders($link_display, 0, $key, $crypt_ok, $good_key);
   $output .= (count($rows) == 0) ? t('You have no bookmarks.') : theme('table', $header, $rows);
   return $output;
 }
@@ -764,18 +764,20 @@ function bookmarks2_overview() {
 /**
  * List the folders a user has created for their bookmarks
  *
+ * @todo do something about ugly code duplication from bookmarks2_overview()
+ * @see bookmarks2_overview()
  * @param bool $link_display
  * @param int $fid
  * @return string
  */
-function _bookmarks2_overview_folders($link_display, $fid = 0) {
+function _bookmarks2_overview_folders($link_display, $fid = 0, $key = '', $crypt_ok = false, $good_key = false) {
   global $user;
 
   $form = array();
   // having all these queries probably isn't the most efficient way of doing this
   $f_result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d', $fid, $user->uid);
   while ($folder_data = db_fetch_object($f_result)) {
-    if(!isset($form[$folder_data->fid])) {
+    if (!isset($form[$folder_data->fid])) {
       $form[$folder_data->fid] = array(
         '#type' => 'fieldset',
         '#title' => check_plain($folder_data->fname),
@@ -783,26 +785,47 @@ function _bookmarks2_overview_folders($link_display, $fid = 0) {
         '#collapsed' => true
       );
     }
-    if($child = _bookmarks2_overview_folders($link_display, $folder_data->fid)) {
+    if ($child = _bookmarks2_overview_folders($link_display, $folder_data->fid, $key, $crypt_ok, $good_key)) {
       $form[$folder_data->fid]['child'] = array(
         '#value' => $child
       );
     }
-    if($bm_result = db_query('SELECT b.url, b.title, b.description, b.options FROM {bookmarks2} b WHERE b.uid = %d AND b.fid = %d', $user->uid, $folder_data->fid)) {
+    if ($bm_result = db_query('SELECT b.url, b.title, b.description, b.uname, b.pword, b.options FROM {bookmarks2} b WHERE b.uid = %d AND b.fid = %d', $user->uid, $folder_data->fid)) {
       $header = array();
       $header[] = array('data' => t('title'), 'field' => 'title', 'sort' => 'asc');
-      if(!$link_display) {
+      if (!$link_display) {
         $header[] = array('data' => t('link'), 'field' => 'url');
+      }
+      if ($crypt_ok) {
+        $header[] = array('data' => t('username'), 'field' => 'uname');
+        $header[] = array('data' => t('password'), 'field' => 'pword');
       }
       $header[] = array('data' => t('operations'), 'colspan' => 2);
 
       $rows = array();
 
       while ($data = db_fetch_object($bm_result)) {
-        if($link_display) {
-          $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display),'&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+        if ($crypt_ok) {
+          if (empty($data->pword)) {
+            $decrypted_pword = '';
+          }
+          elseif ($good_key) {
+            $decrypted_pword = _bookmarks2_decrypt_pword($key, $data->pword);
+          }
+          else {
+            $decrypted_pword = '<em>'. t('hidden') .'</em>';
+          }
+          if ($link_display) {
+            $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword,'&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+          } else {
+            $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+          }
         } else {
-          $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+          if ($link_display) {
+            $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display),'&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+          } else {
+            $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+          }
         }
       }
       $form[$folder_data->fid][$data->url] = array(
@@ -850,7 +873,7 @@ function _bookmarks2_folder_child($inc_top = false) {
 
   $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = 0 AND f.uid = %d', $user->uid);
   while ($data = db_fetch_object($result)) {
-    if($_GET['fid'] != $data->fid) {
+    if ($_GET['fid'] != $data->fid) {
       $folder_tree[$data->fid] = $data->fname;
       _bookmarks2_folder_child_loop($data->fid, $folder_tree, 0);
     }
@@ -872,7 +895,7 @@ function _bookmarks2_folder_child_loop($fid, &$folder_array, $i) {
   $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d', $fid, $user->uid);
   while ($data = db_fetch_object($result)) {
     $folder_array[$data->fid] = str_repeat('-', 2*$i) . ' ' . $data->fname;
-    if($data->fid != $fid) {
+    if ($data->fid != $fid) {
       _bookmarks2_folder_child_loop($data->fid, $folder_array, $i);
     }
   }
@@ -890,13 +913,13 @@ function bookmarks2_save($edit) {
   $options = 0;
   $options |= ($edit['_blank']) ? $edit['_blank'] : 0;
 
-  if($edit['pword'] && $edit['key']) {
+  if ($edit['pword'] && $edit['key']) {
     $encrypted_pword = _bookmarks2_encrypt_pword($edit['key'], $edit['pword']);
   }
 
   $edit['old_url'] = urldecode($edit['old_url']);
   if ($edit['old_url'] && db_result(db_query("SELECT COUNT(b.uid) FROM {bookmarks2} b WHERE b.uid = %d AND b.url = '%s'", $user->uid, $edit['old_url']))) {
-    if(!$edit['pword'] && !$edit['key']) {
+    if (!$edit['pword'] && !$edit['key']) {
       $encrypted_pword = db_result(db_query("SELECT pword FROM {bookmarks2} b WHERE b.uid = %d AND b.url = '%s'", $user->uid, $edit['old_url']));
     }
     db_query("UPDATE {bookmarks2} SET fid = %d, title = '%s', url = '%s', description = '%s', uname = '%s', pword = '%s', options = %d WHERE uid = %d AND url = '%s'", $edit['fid'], $edit['title'], $edit['url'], $edit['description'], $edit['uname'], $encrypted_pword, $options, $user->uid, $edit['old_url']);
@@ -940,7 +963,7 @@ function bookmarks2_settings() {
     '#maxlength' => 5,
     '#default_value' => variable_get('bookmarks2_link_crop_size', 50)
   );
-  if(_bookmarks2_crypt_ok()) {
+  if (_bookmarks2_crypt_ok()) {
     $form['bookmarks2_login_reminder_enabled'] = array(
       '#type' => 'radios',
       '#title' => t('Enable login reminder support'),
@@ -973,7 +996,7 @@ function bookmarks2_validate($edit) {
   if (isset($edit['pword']) && $edit['pword'] && (!isset($edit['key']) || !$edit['key'])) {
     $errors['key'] = t('You must supply your bookmark reminder key to encrypt the password for your login reminder.');
   }
-  elseif($edit['key'] && !_bookmarks2_check_key($edit['key'])) {
+  elseif ($edit['key'] && !_bookmarks2_check_key($edit['key'])) {
     $errors['key'] = t('The reminder key you supplied does not match the one on record.');
   }
 
@@ -1005,7 +1028,7 @@ function bookmarks2_get_canonical_path($url) {
  */
 function _bookmarks2_get_link($url, $title, $description, $options, $link_display = false) {
   $crop = variable_get('bookmarks2_link_crop_size', 50);
-  if($link_display) {
+  if ($link_display) {
     $title = (strlen($title) > $crop) ? substr($title, 0, $crop - 3). '...' : check_plain($title);
   } else {
     $title = (strlen($url) > $crop) ? substr($url, 0, $crop - 3). '...' : check_plain($url);
