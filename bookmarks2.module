@@ -775,7 +775,7 @@ function _bookmarks2_overview_folders($link_display, $fid = 0, $key = '', $crypt
 
   $form = array();
   // having all these queries probably isn't the most efficient way of doing this
-  $f_result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d', $fid, $user->uid);
+  $f_result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d ORDER BY f.fname', $fid, $user->uid);
   while ($folder_data = db_fetch_object($f_result)) {
     if (!isset($form[$folder_data->fid])) {
       $form[$folder_data->fid] = array(
@@ -790,17 +790,18 @@ function _bookmarks2_overview_folders($link_display, $fid = 0, $key = '', $crypt
         '#value' => $child
       );
     }
-    if ($bm_result = db_query('SELECT b.url, b.title, b.description, b.uname, b.pword, b.options FROM {bookmarks2} b WHERE b.uid = %d AND b.fid = %d', $user->uid, $folder_data->fid)) {
-      $header = array();
-      $header[] = array('data' => t('title'), 'field' => 'title', 'sort' => 'asc');
-      if (!$link_display) {
-        $header[] = array('data' => t('link'), 'field' => 'url');
-      }
-      if ($crypt_ok) {
-        $header[] = array('data' => t('username'), 'field' => 'uname');
-        $header[] = array('data' => t('password'), 'field' => 'pword');
-      }
-      $header[] = array('data' => t('operations'), 'colspan' => 2);
+
+    $header = array();
+    $header[] = array('data' => t('title'), 'field' => 'title', 'sort' => 'asc');
+    if (!$link_display) {
+      $header[] = array('data' => t('link'), 'field' => 'url');
+    }
+    if ($crypt_ok) {
+      $header[] = array('data' => t('username'), 'field' => 'uname');
+      $header[] = array('data' => t('password'), 'field' => 'pword');
+    }
+    $header[] = array('data' => t('operations'), 'colspan' => 2);
+    if ($bm_result = db_query('SELECT b.url, b.title, b.description, b.uname, b.pword, b.options FROM {bookmarks2} b WHERE b.uid = %d AND b.fid = %d '. tablesort_sql($header), $user->uid, $folder_data->fid)) {
 
       $rows = array();
 
@@ -871,7 +872,7 @@ function _bookmarks2_folder_child($inc_top = false) {
 
   $folder_tree = $inc_top == true ? array(0 => '['. t('Top level') .']') : array();
 
-  $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = 0 AND f.uid = %d', $user->uid);
+  $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = 0 AND f.uid = %d ORDER BY f.fname', $user->uid);
   while ($data = db_fetch_object($result)) {
     if ($_GET['fid'] != $data->fid) {
       $folder_tree[$data->fid] = $data->fname;
@@ -892,7 +893,7 @@ function _bookmarks2_folder_child_loop($fid, &$folder_array, $i) {
   global $user;
 
   $i++; // should this be static?
-  $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d', $fid, $user->uid);
+  $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d ORDER BY f.fname', $fid, $user->uid);
   while ($data = db_fetch_object($result)) {
     $folder_array[$data->fid] = str_repeat('-', 2*$i) . ' ' . $data->fname;
     if ($data->fid != $fid) {
