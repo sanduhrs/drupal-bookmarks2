@@ -5,7 +5,7 @@
  * @file
  * Lets users keep bookmarks
  *
- * @author David Kent Norman <deekayen {at} deekayen -dot= net>
+ * @author David Kent Norman
  * @link http://deekayen.net/
  * @todo There's some code/functionality duplication to eliminate
  *       Callbacks are underutilized
@@ -43,9 +43,6 @@ function bookmarks2_block($op = 'list', $delta = 0) {
  */
 function bookmarks2_help($section) {
   switch ($section) {
-    case 'admin/modules#description':
-      return t('Enables users to bookmark any page on the site.');
-
     case 'user/bookmarks2':
       return t('A bookmark is a link to an address (URL) on the internet.');
       break;
@@ -89,6 +86,15 @@ function bookmarks2_menu($may_cache) {
   $items[] = array('path' => "bookmarks2/$user->uid/rss.xml", 'title' => t('feed'),
     'callback' => 'bookmarks2_feed', 'access' => $access,
     'type' => MENU_CALLBACK);
+  $items[] = array(
+    'path' => 'admin/settings/bookmarks2',
+    'title' => t('Bookmarks2'),
+    'description' => t('Configure link cropping and login reminder encryption.'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => 'bookmarks2_admin_settings',
+    'access' => user_access('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM
+  );
   return $items;
 }
 
@@ -954,7 +960,7 @@ function _bookmarks2_folder_save($edit) {
  *
  * @return array
  */
-function bookmarks2_settings() {
+function bookmarks2_admin_settings() {
   $form = array();
   $form['bookmarks2_link_crop_size'] = array(
     '#type' => 'textfield',
@@ -976,7 +982,7 @@ function bookmarks2_settings() {
     $form['bookmarks2_login_reminder'] = array('#type' => 'markup', '#value' => t('The mcrypt extension of PHP must be installed on this server for login reminders to work.'));
     $form['bookmarks2_login_reminder_enabled'] = array('#type' => 'hidden', '#value' => '0');
   }
-  return $form;
+  return system_settings_form($form);
 }
 
 /**
