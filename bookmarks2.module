@@ -26,7 +26,7 @@ function bookmarks2_block($op = 'list', $delta = 0) {
     return $blocks;
   }
   elseif ($op == 'view') {
-    switch($delta) {
+    switch ($delta) {
       case 0:
         return theme('bookmarks2_block');
         break;
@@ -159,7 +159,7 @@ function theme_bookmarks2_block() {
 function theme_bookmarks2_delete($url) {
   global $user;
 
-  $query = 'url=' . urlencode($url). '&block=1';
+  $query = 'url='. urlencode($url) .'&block=1';
   return l(theme('image', 'modules/bookmarks2/trash.gif', t('delete')), "bookmarks2/$user->uid/delete", array("title" => t("Delete this bookmark from your list.")), $query, NULL, FALSE, TRUE);
 }
 
@@ -177,7 +177,7 @@ function bookmarks2_feed() {
 
   while ($obj = db_fetch_object($result)) {
     if (!preg_match('@^\w+://.+@', $obj->url)) {
-      $obj->url = implode('/',array($base_url, $obj->url));
+      $obj->url = implode('/', array($base_url, $obj->url));
     }
     $body .= format_rss_item($obj->title, $obj->url, $obj->description);
   }
@@ -212,12 +212,12 @@ function bookmarks2_page() {
       elseif (arg(3) == 'weblink') {
         $edit = bookmarks2_load_weblink(arg(4));
       }
-      $output = drupal_get_form('bookmarks2_form',$edit);
+      $output = drupal_get_form('bookmarks2_form', $edit);
       break;
 
     case 'edit':
       $title = t('Edit bookmark');
-      $output = ($url = urldecode($_GET['url'])) ? drupal_get_form('bookmarks2_form',bookmarks2_load($url)) : drupal_set_message(t('Bookmark cannot be edited, because it is not in your list.'), 'error');
+      $output = ($url = urldecode($_GET['url'])) ? drupal_get_form('bookmarks2_form', bookmarks2_load($url)) : drupal_set_message(t('Bookmark cannot be edited, because it is not in your list.'), 'error');
       break;
 
     case t('Save'):
@@ -227,7 +227,7 @@ function bookmarks2_page() {
         drupal_goto("bookmarks2/$user->uid");
       }
       else {
-        $output = drupal_get_form('bookmarks2_form',$edit);
+        $output = drupal_get_form('bookmarks2_form', $edit);
       }
       break;
 
@@ -238,12 +238,12 @@ function bookmarks2_page() {
 
     case 'addfolder':
       $title = t('Create new folder');
-      $output = drupal_get_form('bookmarks2_folder_form',$edit);
+      $output = drupal_get_form('bookmarks2_folder_form', $edit);
       break;
 
     case 'folderedit':
       $title = t('Edit folder');
-      $output = ($fid = $_GET['fid']) ? drupal_get_form('bookmarks2_folder_form',_bookmarks2_folder_load($fid)) : drupal_set_message(t('Folder cannot be edited, because it is not in your list.'), 'error');
+      $output = ($fid = $_GET['fid']) ? drupal_get_form('bookmarks2_folder_form', _bookmarks2_folder_load($fid)) : drupal_set_message(t('Folder cannot be edited, because it is not in your list.'), 'error');
       break;
 
     case 'config':
@@ -268,7 +268,7 @@ function bookmarks2_page() {
   }
 
   $rss = '<link rel="alternate" type="application/rss+xml" title="'
-    .t("%user's bookmarks", array('%user' => $user->name))
+    . t("%user's bookmarks", array('%user' => $user->name))
     .'" href="'. url(implode('/', array($_GET['q'], 'rss.xml'))) .'" />';
 
   drupal_set_html_head($rss);
@@ -294,11 +294,8 @@ function bookmarks2_delete() {
 }
 
 
-function bookmarks2_delete_confirm($url, $uid)
-{
+function bookmarks2_delete_confirm($url, $uid) {
   $form['url'] = array('#type' => 'hidden', '#value' => $url);
-
-
   return confirm_form($form, t('Are you sure you want to delete this bookmark?'), "bookmarks2/{$uid}", '', t('Delete'), t('Cancel'));
 }
 
@@ -336,11 +333,8 @@ function bookmarks2_folder_delete() {
 }
 
 
-function bookmarks2_folder_delete_confirm($fid, $uid)
-{
+function bookmarks2_folder_delete_confirm($fid, $uid) {
   $form['fid'] = array('#type' => 'hidden', '#value' => (int)$fid);
-
-
   return confirm_form($form, t('Are you sure you want to delete this folder?'), "bookmarks2/{$uid}", '', t('Delete'), t('Cancel'));
 }
 
@@ -356,7 +350,7 @@ function bookmarks2_folder_delete_confirm_submit($form_id, $form_values, $fid = 
 
   if ($child) {
     $result = db_query('SELECT f.fid FROM {bookmarks2_folders} f WHERE f.uid = %d AND f.fid = %d', $user->uid, $fid);
-    while($data = db_fetch_object($result)) {
+    while ($data = db_fetch_object($result)) {
       db_query('DELETE FROM {bookmarks2} WHERE uid = %d AND fid = %d', $user->uid, $data->fid);
       db_query('DELETE FROM {bookmarks2_folders} WHERE uid = %d AND fid = %d', $user->uid, $data->fid);
       bookmarks2_folder_delete_confirm_submit(NULL, NULL, $data->fid, true);
@@ -734,8 +728,8 @@ function bookmarks2_overview() {
       '#value' => t('Display password reminders')
     );
     $output .= drupal_get_form('bookmarks2_key', $form);
-//    die(var_dump($_POST)); // outputs an empty array after a form submission
-*/
+    //die(var_dump($_POST)); // outputs an empty array after a form submission
+ */
     // this is the output of the above $form since drupal_get_form is making $key disappear in a HTTP redirect or something
     if (_bookmarks2_key_isset()) {
       $output .= '<form action="" method="post" id="bookmarks2_key">
@@ -771,15 +765,18 @@ function bookmarks2_overview() {
         $decrypted_pword = '<em>'. t('hidden') .'</em>';
       }
       if ($link_display) {
-        $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
-      } else {
-        $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+        $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
+      } 
+      else {
+        $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
       }
-    } else {
+    } 
+    else {
       if ($link_display) {
-        $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
-      } else {
-        $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+        $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
+      }
+      else {
+        $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
       }
     }
   }
@@ -845,15 +842,18 @@ function _bookmarks2_overview_folders($link_display, $fid = 0, $key = '', $crypt
             $decrypted_pword = '<em>'. t('hidden') .'</em>';
           }
           if ($link_display) {
-            $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword,'&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
-          } else {
-            $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+            $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
           }
-        } else {
+          else {
+            $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
+          }
+        }
+        else {
           if ($link_display) {
-            $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display),'&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
-          } else {
-            $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url=' . urlencode($data->url)).' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url=' . urlencode($data->url)));
+            $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
+          }
+          else {
+            $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
           }
         }
       }
@@ -880,9 +880,9 @@ function bookmarks2_folder_overview() {
 
   $folders = _bookmarks2_folder_child();
 
-  while(list($key, $value) = each($folders)) {
-    $fname = (strlen($value) > 50) ? substr($value, 0, 47). '...' : $value;
-    $rows[] = array($value, '&nbsp;'.l(t('edit'), "bookmarks2/$user->uid/folderedit", null, 'fid=' . $key).' '. l(t('delete'), "bookmarks2/$user->uid/deletefolder", null, 'fid=' . $key));
+  while (list($key, $value) = each($folders)) {
+    $fname = (strlen($value) > 50) ? substr($value, 0, 47) .'...' : $value;
+    $rows[] = array($value, '&nbsp;'. t(t('edit'), "bookmarks2/$user->uid/folderedit", null, 'fid='. $key) .' '. l(t('delete'), "bookmarks2/$user->uid/deletefolder", null, 'fid='. $key));
   }
 
   $output .= (count($rows) == 0) ? t('You have no folders.') : theme('table', $header, $rows);
@@ -923,7 +923,7 @@ function _bookmarks2_folder_child_loop($fid, &$folder_array, $i) {
   $i++; // should this be static?
   $result = db_query('SELECT f.fid, f.fname FROM {bookmarks2_folders} f WHERE f.f_parent_id = %d AND f.uid = %d ORDER BY f.fname', $fid, $user->uid);
   while ($data = db_fetch_object($result)) {
-    $folder_array[$data->fid] = str_repeat('-', 2*$i) . ' ' . $data->fname;
+    $folder_array[$data->fid] = str_repeat('-', 2*$i) .' '. $data->fname;
     if ($data->fid != $fid) {
       _bookmarks2_folder_child_loop($data->fid, $folder_array, $i);
     }
@@ -971,7 +971,8 @@ function _bookmarks2_folder_save($edit) {
   if (db_result(db_query("SELECT COUNT(fid) FROM {bookmarks2_folders} WHERE fid = %d AND uid = %d", $edit['fid'], $user->uid))) {
     db_query("UPDATE {bookmarks2_folders} SET fname = '%s', f_parent_id = %d WHERE uid = %d AND fid = %d", $edit['fname'], $edit['f_parent_id'], $user->uid, $edit['fid']);
     drupal_set_message(t('The folder has been updated.'));
-  } else {
+  }
+  else {
     db_query("INSERT INTO {bookmarks2_folders} (uid, f_parent_id, fname) VALUES (%d, %d, '%s')", $user->uid, $edit['f_parent_id'], $edit['fname']);
     drupal_set_message(t('The folder has been added to your bookmarks.'));
   }
@@ -1000,7 +1001,8 @@ function bookmarks2_admin_settings() {
       '#default_value' => variable_get('bookmarks2_login_reminder_enabled', '0'),
       '#description' => t('Gives users the option to store a username and password reminder for each bookmark. The password gets stored with strong encryption when the user correctly enters their password reminder key. Administrators are not able to read or recover the password or encryption key.')
     );
-  } else {
+  }
+  else {
     $form['bookmarks2_login_reminder'] = array('#type' => 'markup', '#value' => t('The mcrypt extension of PHP must be installed on this server for login reminders to work.'));
     $form['bookmarks2_login_reminder_enabled'] = array('#type' => 'hidden', '#value' => '0');
   }
@@ -1059,9 +1061,10 @@ function bookmarks2_get_canonical_path($url) {
 function _bookmarks2_get_link($url, $title, $description, $options, $link_display = false) {
   $crop = variable_get('bookmarks2_link_crop_size', 50);
   if ($link_display) {
-    $title = (strlen($title) > $crop) ? substr($title, 0, $crop - 3). '...' : check_plain($title);
-  } else {
-    $title = (strlen($url) > $crop) ? substr($url, 0, $crop - 3). '...' : check_plain($url);
+    $title = (strlen($title) > $crop) ? substr($title, 0, $crop - 3) .'...' : check_plain($title);
+  }
+  else {
+    $title = (strlen($url) > $crop) ? substr($url, 0, $crop - 3) .'...' : check_plain($url);
   }
   return (preg_match("!^[a-zA-Z]+://!", $url)) ? "<a href=\"$url\" title=\"". check_plain($description) .'"'. ($options & 1 ? ' target="_blank"' : '') ."\">$title</a>" : l($title, $url, ($options & 1 ? array('target' => '_blank') : array()), null, null, true);
 }
@@ -1136,5 +1139,3 @@ function _bookmarks2_hash_key($key) {
 function _bookmarks2_check_key($key) {
   return strcmp(_bookmarks2_fetch_key(), _bookmarks2_hash_key($key)) === 0;
 }
-
-
