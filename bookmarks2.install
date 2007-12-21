@@ -1,11 +1,14 @@
 <?php
 // $Id$
 
+/**
+ * Implementation of hook_install()
+ */
 function bookmarks2_install() {
   switch ($GLOBALS['db_type']) {
     case 'mysql':
     case 'mysqli':
-      db_query("CREATE TABLE bookmarks2 (
+      db_query("CREATE TABLE {bookmarks2} (
         uid int(10) unsigned NOT NULL,
         url varchar(128) NOT NULL,
         title varchar(128) NOT NULL,
@@ -17,7 +20,7 @@ function bookmarks2_install() {
         KEY uid (uid),
         KEY fid (fid))");
 
-      db_query("CREATE TABLE bookmarks2_folders (
+      db_query("CREATE TABLE {bookmarks2_folders} (
         fid mediumint(8) unsigned NOT NULL auto_increment,
         f_parent_id mediumint(8) unsigned NOT NULL default '0',
         uid int(10) unsigned NOT NULL default '0',
@@ -27,7 +30,7 @@ function bookmarks2_install() {
         KEY uid (uid),
         KEY f_parent_id (f_parent_id))");
 
-      db_query("CREATE TABLE bookmarks2_prefs (
+      db_query("CREATE TABLE {bookmarks2_prefs} (
         uid int(10) unsigned NOT NULL,
         options tinyint(3) unsigned NOT NULL default '0',
         pword_key varbinary(100) NULL DEFAULT NULL,
@@ -35,12 +38,24 @@ function bookmarks2_install() {
   }
 }
 
+/**
+ * Implementation of hook_uninstall()
+ */
+function bookmarks2_uninstall() {
+  db_query('DROP TABLE {bookmarks2}');
+  db_query('DROP TABLE {bookmarks2_folders}');
+  db_query('DROP TABLE {bookmarks2_prefs}');
+  
+  variable_del('bookmarks2_login_reminder_enabled');
+  variable_del('bookmarks2_link_crop_size');
+}
+
 function bookmarks2_update_1() {
   $ret = array();
   switch ($GLOBALS['db_type']) {
     case 'mysql':
     case 'mysqli':
-      $ret[] = update_sql("ALTER TABLE bookmarks2_prefs CHANGE pword_hash pword_key VARBINARY(100) NULL DEFAULT NULL");
+      $ret[] = update_sql("ALTER TABLE {bookmarks2_prefs} CHANGE pword_hash pword_key VARBINARY(100) NULL DEFAULT NULL");
   }
   return $ret;
 }
