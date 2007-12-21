@@ -1113,5 +1113,3 @@ function _bookmarks2_hash_key($key) {
 function _bookmarks2_check_key($key) {
   return strcmp(_bookmarks2_fetch_key(), _bookmarks2_hash_key($key)) === 0;
 }
-
-?>
