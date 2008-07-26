@@ -122,17 +122,22 @@ function theme_bookmarks2_block() {
     // Print bookmarks list as an item list
     $output = (count($bookmarks) ? theme('item_list', $bookmarks) : t('You have no bookmarks.'));
     $links = array(
-      array(
+      'bookmarks2_quick_link' => array(
         'title' => t('quick link'),
         'href' => "bookmarks2/$user->uid/add/quick",
         'attributes' => array(
           'title' => t('Bookmark the current page.'),
+          'class' => 'bookmarks2_link',
         ),
         'query' => 'title='. urlencode(drupal_get_title()),
       ),
-      array(
+      'bookmarks2_manage' => array(
         'title' => t('manage'),
         'href' => "bookmarks2/$user->uid",
+        'attributes' => array(
+          'title' => t('Manage your bookmarks.'),
+          'class' => 'bookmarks2_link',
+        ),
       ),
     );
     $output .= '<div class="links">'. theme('links', $links) .'</div>';
@@ -766,11 +771,11 @@ function bookmarks2_overview() {
       }
       if ($link_display) {
         $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
-      } 
+      }
       else {
         $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
       }
-    } 
+    }
     else {
       if ($link_display) {
         $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
@@ -882,7 +887,7 @@ function bookmarks2_folder_overview() {
 
   while (list($key, $value) = each($folders)) {
     $fname = (strlen($value) > 50) ? substr($value, 0, 47) .'...' : $value;
-    $rows[] = array($value, '&nbsp;'. t(t('edit'), "bookmarks2/$user->uid/folderedit", null, 'fid='. $key) .' '. l(t('delete'), "bookmarks2/$user->uid/deletefolder", null, 'fid='. $key));
+    $rows[] = array($value, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/folderedit", null, 'fid='. $key) .' '. l(t('delete'), "bookmarks2/$user->uid/deletefolder", null, 'fid='. $key));
   }
 
   $output .= (count($rows) == 0) ? t('You have no folders.') : theme('table', $header, $rows);
