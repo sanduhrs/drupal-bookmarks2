@@ -122,17 +122,22 @@ function theme_bookmarks2_block() {
     // Print bookmarks list as an item list
     $output = (count($bookmarks) ? theme('item_list', $bookmarks) : t('You have no bookmarks.'));
     $links = array(
-      array(
+      'bookmarks2_quick_link' => array(
         'title' => t('quick link'),
         'href' => "bookmarks2/$user->uid/add/quick",
         'attributes' => array(
           'title' => t('Bookmark the current page.'),
+          'class' => 'bookmarks2_link',
         ),
         'query' => 'title='. urlencode(drupal_get_title()),
       ),
-      array(
+      'bookmarks2_manage' => array(
         'title' => t('manage'),
         'href' => "bookmarks2/$user->uid",
+        'attributes' => array(
+          'title' => t('Manage your bookmarks.'),
+          'class' => 'bookmarks2_link',
+        ),
       ),
     );
     $output .= '<div class="links">'. theme('links', $links) .'</div>';
