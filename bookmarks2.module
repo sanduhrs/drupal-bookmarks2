@@ -788,10 +788,23 @@ function bookmarks2_overview() {
       }
       
       if ($link_display) {
-        $rows[] = array(_bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
+        $rows[] = array(
+          _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display),
+          $data->uname,
+          $decrypted_pword,
+          l(t('edit'), "bookmarks2/edit", array('query' => 'url='. urlencode($data->url))),
+          l(t('delete'), "bookmarks2/delete", array('query' => 'url='. urlencode($data->url)))
+        );
       }
       else {
-        $rows[] = array($data->title, _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display), $data->uname, $decrypted_pword, '&nbsp;'. l(t('edit'), "bookmarks2/$user->uid/edit", null, 'url='. urlencode($data->url)) .' '. l(t('delete'), "bookmarks2/$user->uid/delete", null, 'url='. urlencode($data->url)));
+        $rows[] = array(
+          $data->title,
+          _bookmarks2_get_link($data->url, $data->title, $data->description, $data->options, $link_display),
+          $data->uname,
+          $decrypted_pword,
+          l(t('edit'), "bookmarks2/edit", array('query' => 'url='. urlencode($data->url))),
+          l(t('delete'), "bookmarks2/delete", array('query' => 'url='. urlencode($data->url)))
+        );
       }
       
     }
