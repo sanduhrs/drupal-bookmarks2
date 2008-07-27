@@ -2,10 +2,13 @@
 // $Id$
 
 /**
+ * Bookmarks2
+ * 
  * @file
  * Lets users keep bookmarks
  *
  * @author David Kent Norman
+ * Stefan Auditor <stefan.auditor@erdfisch.de>
  * @link http://deekayen.net/
  * @todo There's some code/functionality duplication to eliminate
  *       Callbacks are underutilized
@@ -349,7 +352,7 @@ function bookmarks2_folder_delete_confirm_submit($form, &$form_state, $fid = 0, 
 }
 
 /**
- * Get a folder tree
+ * Get a folder tree for the form select box
  */
 function _bookmarks2_folder_select_options() {
   $folders = _bookmarks2_folder_child(true);
