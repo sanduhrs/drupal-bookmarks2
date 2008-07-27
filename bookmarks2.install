@@ -2,6 +2,10 @@
 // $Id$
 
 /**
+ * Bookmarks2
+ */
+
+/**
  * Implementation of hook_install()
  */
 function bookmarks2_install() {
