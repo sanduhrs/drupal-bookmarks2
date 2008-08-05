@@ -504,6 +504,7 @@ function bookmarks2_form_submit($form, &$form_state) {
     }
     db_query("UPDATE {bookmarks2} SET fid = %d, title = '%s', url = '%s', description = '%s', uname = '%s', pword = '%s', options = %d WHERE uid = %d AND url = '%s'", $form_state['values']['fid'], $form_state['values']['title'], $form_state['values']['url'], $form_state['values']['description'], $form_state['values']['uname'], $encrypted_pword, $options, $user->uid, $form_state['values']['old_url']);
     drupal_set_message(t('The bookmark has been updated.'));
+    drupal_goto('bookmarks2');
   }
   else {
     db_query("INSERT INTO {bookmarks2} (uid, fid, url, title, description, uname, pword, options) VALUES (%d, %d, '%s', '%s', '%s', '%s', '%s', %d)", $user->uid, $form_state['values']['fid'], $form_state['values']['url'], $form_state['values']['title'], $form_state['values']['description'], $form_state['values']['uname'], $encrypted_pword, $options);
