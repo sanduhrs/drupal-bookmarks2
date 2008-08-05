@@ -8,10 +8,9 @@
  * Lets users keep bookmarks
  *
  * @author David Kent Norman
- * Stefan Auditor <stefan.auditor@erdfisch.de>
  * @link http://deekayen.net/
+ * @author Stefan Auditor <stefan.auditor@erdfisch.de>
  * @todo There's some code/functionality duplication to eliminate
- *       Callbacks are underutilized
  *       add option to submit key by SSL
  *       password reminder re-encryption if users enter their old key with a new key
  */
