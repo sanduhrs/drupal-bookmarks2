@@ -2,6 +2,8 @@
 // $Id$
 
 /**
+ * Bookmarks2
+ * 
  * @file
  * Lets users keep bookmarks
  *
@@ -116,6 +118,7 @@ function bookmarks2_menu($may_cache) {
     $items[] = array(
       'path' => "admin/settings/bookmarks2",
       'title' => t('Bookmarks settings'),
+      'description' => t('Change bookmarks settings.'),
       'callback' => 'drupal_get_form',
       'callback arguments' => array('bookmarks2_admin_settings'),
       'access' => user_access("access administration pages"),
@@ -301,7 +304,7 @@ function bookmarks2_delete_confirm_submit($form_id, $form_values) {
  *
  * @todo name the folder in the question
  */
-function bookmarks2_folder_delete_confirm(&$form_state, $fid = NULL) {
+function bookmarks2_folder_delete_confirm($fid = NULL) {
   if (!$fid) {
     $fid = (int) check_plain($_GET['fid']);
   }
@@ -320,7 +323,7 @@ function bookmarks2_folder_delete_confirm(&$form_state, $fid = NULL) {
  * @param int $fid
  * @return string
  */
-function bookmarks2_folder_delete_confirm_submit($form, &$form_state, $fid = 0, $child = false) {
+function bookmarks2_folder_delete_confirm_submit($form_id, $form_values, $fid = 0, $child = false) {
   global $user;
 
   if ($child) {
@@ -332,12 +335,12 @@ function bookmarks2_folder_delete_confirm_submit($form, &$form_state, $fid = 0, 
     }
   }
   else {
-    if (!is_numeric($form_state['values']['fid'])) {
+    if (!is_numeric($form_values['fid'])) {
       drupal_set_message(t('Folder ID is not the correct format!', 'error'));
     }
     else {
-      db_query('DELETE FROM {bookmarks2} WHERE uid = %d AND fid = %d', $user->uid, $form_state['values']['fid']);
-      db_query('DELETE FROM {bookmarks2_folders} WHERE uid = %d AND fid = %d', $user->uid, $form_state['values']['fid']);
+      db_query('DELETE FROM {bookmarks2} WHERE uid = %d AND fid = %d', $user->uid, $form_values['fid']);
+      db_query('DELETE FROM {bookmarks2_folders} WHERE uid = %d AND fid = %d', $user->uid, $form_values['fid']);
       drupal_set_message(t('Deleted bookmark folder.'));
     }
 
