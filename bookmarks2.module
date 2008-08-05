@@ -275,7 +275,7 @@ function bookmarks2_feed() {
 /**
  * Confirmation screen to make sure user really wants to delete their bookmark
  */
-function bookmarks2_delete_confirm(&$form_state = null, $url = NULL, $uid = NULL) {
+function bookmarks2_delete_confirm($url = NULL, $uid = NULL) {
   if (!$url) {
     $url = check_plain($_GET['url']);
   }
@@ -293,7 +293,7 @@ function bookmarks2_delete_confirm(&$form_state = null, $url = NULL, $uid = NULL
 function bookmarks2_delete_confirm_submit($form_id, $form_values) {
   global $user;
   
-  db_query("DELETE FROM {bookmarks2} WHERE uid = %d AND url = '%s'", $user->uid, $form_state['values']['url']);
+  db_query("DELETE FROM {bookmarks2} WHERE uid = %d AND url = '%s'", $user->uid, $form_values['url']);
   drupal_set_message(t('Deleted bookmark.'));
 
   drupal_goto('bookmarks2');
@@ -471,11 +471,11 @@ function bookmarks2_form($edit = null) {
 /**
  * Form validation
  */
-function bookmarks2_form_validate($form, &$form_state) {
-  if ((isset($form_state['values']['pword']) && $form_state['values']['pword'] == '') && (!isset($form_state['values']['key']) || !$form_state['values']['key'])) {
+function bookmarks2_form_validate($form, &$form_values) {
+  if ((isset($form_values['pword']) && $form_values['pword'] == '') && (!isset($form_values['key']) || !$form_values['key'])) {
     form_set_error('pword', t('You must supply your bookmark reminder key to encrypt the password for your login reminder.'));
   }
-  elseif ($form_state['values']['key'] && !_bookmarks2_check_key($form_state['values']['key'])) {
+  elseif ($form_values['key'] && !_bookmarks2_check_key($form_values['key'])) {
     form_set_error('key', t('The reminder key you supplied does not match the one on record.'));
   }
 }
