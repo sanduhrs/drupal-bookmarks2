@@ -1,5 +1,4 @@
 <?php
-// $Id$
 
 function bookmarks2_install() {
   switch ($GLOBALS['db_type']) {
