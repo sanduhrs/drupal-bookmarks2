@@ -1,19 +1,24 @@
-Drupal bookmarks2.module README.txt
-==============================================================================
+Drupal Bookmarks with login reminders Module
+============================================
+http://drupal.org/project/bookmarks2
 
-This module lets users with "access bookmarks" permission to have a
-bookmark block. User can add and delete bookmarks pointing
-to onsite pages, plus edit the titles of existing bookmarks, in case the
-default title does not fit.
 
-Requirements
-------------------------------------------------------------------------------
+## Description
+A simple bookmarks module with some advanced features like
 
-This module requires Drupal 4.7.
+bookmarks RSS feed per user
+sorting bookmarks in folders
+optional login/password reminder with encryption
+optional column consolidation in the link display page
+Please seriously consider SSL encryption for your site, if you want to use the login/password reminder functionality.
 
-Installation
-------------------------------------------------------------------------------
+Originally branched from bookmarks module [1]
+[1] http://drupal.org/project/bookmarks
 
+## Requirements
+Drupal 4.7.x
+
+## Installation
 1. Create the SQL table.
      mysql -u username -ppassword drupal < bookmarks2.sql
 
@@ -38,9 +43,7 @@ Installation
    user/$user->uid/bookmarks2/add/quick URL target for the link (where
    $user->uid is the user identifier).
 
-Authors
-------------------------------------------------------------------------------
-
+## Authors
 David Kent Norman <deekayen [at] deekayen {dot} net> (maintainer)
 Sponsored by Advanced Automation http://www.advancedautomationinc.com/
 
@@ -49,9 +52,7 @@ Al Maw         <drupal [at] almaw.com>
 Matt Westgate  <drupal [at] asitis.org>
 Gabor Hojtsy   <goba [at] php.net>
 
-History
-------------------------------------------------------------------------------
-
+## History
 This module idea came from kuro5hin, and it was originally created by
 Marco Molinari <marco [at] porciletto.org>. Updated Feb 2003 by Al Maw
 <drupal [at] almaw.com> to work with Drupal CVS (clean URLs).
@@ -61,3 +62,17 @@ Drupal URL bookmarks by Gabor Hojtsy (<goba [at] php.net>). Matt Westgate
 rewritten the module to make it capable of handling outbound links in
 February 2004. David Kent Norman forked the bookmarks module to
 bookmarks2 to add some controversial features and keep a simpler alternative.
+
+## Bug reports and feature requests
+1. Go to the module issue queue at http://drupal.org/project/issues/bookmarks2?status=All&categories=All
+2. Click on CREATE A NEW ISSUE link.
+3. Fill the form.
+4. To get a status report on your request go to http://drupal.org/project/issues/user
+
+
+## UPGRADING
+Read more at http://drupal.org/node/250790
+
+## License
+Licensed under the GNU General Public License, GPL v2.
+
